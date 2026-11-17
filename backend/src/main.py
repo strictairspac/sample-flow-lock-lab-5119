@@ -11,6 +11,10 @@ from src.middlewares.request_id import RequestIdMiddleware
 @asynccontextmanager
 async def lifespan(app):
     Base.metadata.create_all(engine)
+    with engine.begin() as c:
+        # 既有库的幂等列升级（新库由 metadata 直接建全）
+        c.execute(text("ALTER TABLE trials ADD COLUMN IF NOT EXISTS cancel_reason TEXT NOT NULL DEFAULT ''"))
+        c.execute(text("ALTER TABLE trials ADD COLUMN IF NOT EXISTS run_token VARCHAR(64) NOT NULL DEFAULT ''"))
     if os.getenv('SEED_DEMO','true')=='true':
         try:
             from scripts.seed_demo import seed

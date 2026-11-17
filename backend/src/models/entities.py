@@ -20,6 +20,7 @@ class Trial(Base):
     transfer_id=Column(Integer,ForeignKey('transfers.id'),nullable=False);timeout_ms=Column(Integer,nullable=False)
     status=Column(String(20),default='queued',nullable=False);result=Column(JSON,nullable=True)
     created_at=Column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc));error=Column(Text,default='')
+    cancel_reason=Column(Text,default='');run_token=Column(String(64),default='')
 class TrialBalance(Base):
     __tablename__='trial_balances'
     trial_id=Column(Integer,ForeignKey('trials.id'),primary_key=True);remaining=Column(Integer,nullable=False);received=Column(Integer,nullable=False,default=0)

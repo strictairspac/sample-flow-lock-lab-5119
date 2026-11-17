@@ -38,7 +38,9 @@ docker compose exec -T backend python -m scripts.seed_demo
 
 输入：流转申请、50–2000ms 锁等待上限。输出：实际 PID、错误码、等待耗时、剩余量、接收量、回执数和 SHA256。口径为 `remaining + received == initial`、remaining非负、仅A回执一条；B回执必须为零。等待耗时受主机负载影响，SHA包含PID和实际耗时因此每次不同。算法输入和最终不变量可复现。失败态包括申请量超限、数据库错误、线程协调超时、队列不可用；页面显示错误并允许创建新演练。
 
-单 worker 顺序运行任务，无生产重试/崩溃恢复调度；worker中断时 running 任务需要人工重建，不能用作生产样本库存扣减。
+取消流程：误发演练可在「并发执行」页取消，需二次确认并填写原因（写入审计与证据页）。排队中的演练原子跃迁为已取消，worker 领取前校验状态，取消后不再执行。运行中的演练先进入取消中：watcher 线程发现后用 `pg_cancel_backend` 终止 B 的锁等待（SQLSTATE 57014），A 在提交前回滚——未提交回执与演练账在同一事务内一起回滚，原样本量不变；worker 确认回滚干净（回执 0 条、remaining=initial、received=0）才写入已取消，等待期间页面保持取消中，不提前报成功。取消与提交并发时以数据库状态为准：已提交的返回已完成，其余确认取消后不再产生回执。终态写入以 `run_token` 围栏加状态条件更新，过期执行者不得改写终态；重试取消幂等，不新增审计。worker 启动时恢复中断现场：取消中的续办为已取消，运行中的标记失败并提示重新发起。
+
+单 worker 顺序运行任务，无生产重试/崩溃恢复调度；不能用作生产样本库存扣减。
 
 ## 工程说明
 
@@ -51,7 +53,7 @@ docker compose exec -T backend python -m scripts.seed_demo
 |redis|Redis7|持久队列|
 
 目录：`frontend/src/{api,stores,types,components/common,hooks,pages,router,utils,constants}`；`backend/src/{routes,controllers,services,models,schemas,middlewares,utils,constants,config}`；`backend/scripts/seed_demo.py`；`backend/migrations/001_initial.sql`。
-核心实体 Sample、Transfer、Trial 各有模型、schema、服务、路由、API、store与页面；共享 table/badge/frame 组件。共享枚举 roles/run states 位于后端 `src/constants/enums.py`、模型/权限引用和前端 `src/constants/enums.js`、frame/badge；状态枚举 queued/running/completed/failed。两个后端中间件：request_id/errors。
+核心实体 Sample、Transfer、Trial 各有模型、schema、服务、路由、API、store与页面；共享 table/badge/frame 组件。共享枚举 roles/run states 位于后端 `src/constants/enums.py`、模型/权限引用和前端 `src/constants/enums.js`、frame/badge；状态枚举 queued/running/cancelling/completed/failed/cancelled。两个后端中间件：request_id/errors。
 
 环境变量见 `.env.example`：COMPOSE_PROJECT_NAME、三端口、DB_PASSWORD、JWT_SECRET、SEED_DEMO。默认密码仅用于本地演示；JWT8小时有效。seed按自然键仅插入缺失行，不覆盖修改。所有5服务有健康检查，backend/worker依赖健康数据库/Redis，frontend依赖backend；db/redis/artifacts使用命名卷。停止及清空本项目数据：`docker compose down -v --remove-orphans`。
 

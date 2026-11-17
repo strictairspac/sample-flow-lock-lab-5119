@@ -1,13 +1,15 @@
 from fastapi import APIRouter,Depends
 from src.config.database import db_session
 from src.utils.security import current,writer
-from src.schemas.trial import TrialInput
+from src.schemas.trial import TrialInput,CancelInput
 from src.services import trials as service
 router=APIRouter()
 @router.get('/trials')
 def listing(db=Depends(db_session),user=Depends(current)): return service.listing(db)
 @router.post('/trials',status_code=201)
 def create(data:TrialInput,db=Depends(db_session),user=Depends(writer)): return service.create(db,data,user)
+@router.post('/trials/{ident}/cancel')
+def cancel(ident:int,data:CancelInput,db=Depends(db_session),user=Depends(writer)): return service.cancel(db,ident,data,user)
 from fastapi.responses import Response
 import json
 @router.get('/trials/{ident}')

@@ -1,5 +1,8 @@
 -- Schema is applied idempotently by SQLAlchemy metadata at startup.
 -- See src/models/entities.py for authoritative tables, constraints and relationships.
+-- Startup also applies: ALTER TABLE trials ADD COLUMN IF NOT EXISTS cancel_reason / run_token.
+-- Trial states: queued -> running -> completed/failed; cancel path: queued -> cancelled,
+-- running -> cancelling -> cancelled (worker confirms rollback before the terminal write).
 -- Critical locking query (worker only):
 -- SELECT remaining FROM trial_balances WHERE trial_id = :id FOR UPDATE;
 -- SET LOCAL lock_timeout = '250ms';
